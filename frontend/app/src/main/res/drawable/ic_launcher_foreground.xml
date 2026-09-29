@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The client's real crest, replacing the generic drawn basket icon (see BrandLogo.kt for the
+     same asset used in-app). Wrapped in an explicit <inset> rather than relying on padding
+     baked into the bitmap itself — Android's adaptive icon renderer re-scales/re-crops a plain
+     <bitmap> foreground regardless of any margin already in the image, so the inset is the only
+     reliable way to keep the crest (and the "S" in MACKSONS) inside the safe zone that survives
+     circular/squircle icon masking on different launchers. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/logo_macksons_icon"
+    android:insetLeft="18%"
+    android:insetTop="18%"
+    android:insetRight="18%"
+    android:insetBottom="18%" />

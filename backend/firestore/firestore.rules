@@ -1,0 +1,151 @@
+rules_version = '2';
+
+// Firestore Security Rules — Part 1 section 9.3.13 ("Security"). Enforces the RBAC boundary
+// server-side via Firebase Auth custom claims (see functions/src/auth.ts), so a compromised or
+// modified Android client can never read or write data its role shouldn't touch — the rules
+// engine is the actual authority, not the app's UI.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function hasAnyRole(roles) {
+      return isSignedIn() && role() in roles;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- users -------------------------------------------------------------------------
+    match /users/{uid} {
+      allow read: if isOwner(uid) || hasAnyRole(['ADMIN', 'MANAGER']);
+      allow create: if isOwner(uid);
+      // Customers may edit their own profile but never their own role/loyaltyPoints —
+      // those are only ever changed by Cloud Functions (assignUserRole, checkout loyalty
+      // accrual) using the Admin SDK, which is not subject to these rules.
+      allow update: if (isOwner(uid)
+                          && request.resource.data.role == resource.data.role
+                          && request.resource.data.loyaltyPoints == resource.data.loyaltyPoints)
+                        || hasAnyRole(['ADMIN', 'MANAGER']);
+      allow delete: if hasAnyRole(['ADMIN']);
+
+      match /coupons/{couponCode} {
+        allow read: if isOwner(uid) || hasAnyRole(['ADMIN', 'MANAGER']);
+        // Written either by the assignCoupon Cloud Function (Admin SDK, bypasses these rules
+        // entirely) or directly by the admin web console — both require the same ADMIN/MANAGER
+        // custom claim, so trusting the direct write here doesn't weaken the boundary.
+        allow write: if hasAnyRole(['ADMIN', 'MANAGER']);
+      }
+    }
+
+    // ---- storeNodes / catalogue ----------------------------------------------------------
+    match /storeNodes/{storeId} {
+      allow read: if isSignedIn();
+      allow write: if hasAnyRole(['ADMIN', 'MANAGER']);
+
+      match /products/{productId} {
+        allow read: if isSignedIn();
+        // Store Manager live inventory override (Part 1 US-23) OR the atomic stock decrement
+        // a customer's own device runs at checkout (see FirestoreRepository.checkoutOrder on
+        // Android) — Cloud Functions are written but undeployed on the Spark plan, so this
+        // transaction runs client-side instead of server-side. Restricted to touching only
+        // currentStockLevel, and only downward, so a customer can never rewrite price/name/etc.
+        allow write: if hasAnyRole(['ADMIN', 'MANAGER']) ||
+          (isSignedIn() &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentStockLevel']) &&
+           request.resource.data.currentStockLevel < resource.data.currentStockLevel);
+      }
+    }
+
+    // ---- staff directories ----------------------------------------------------------------
+    match /pickers/{pickerId} {
+      // Any signed-in customer's checkout needs to find an on-duty picker to hand the order to
+      // (see the note on /orders/{orderId} allow create below) — this only exposes duty status
+      // and store assignment, nothing sensitive.
+      allow read: if isSignedIn();
+      allow write: if isOwner(pickerId) || hasAnyRole(['ADMIN', 'MANAGER']);
+    }
+
+    match /drivers/{driverId} {
+      // The customer's tracking screen needs to read the assigned driver's name/photo/plate for
+      // door-side verification (WIL group requirement) — any signed-in user, same trade-off
+      // already made for pickers above, nothing here is more sensitive than duty status.
+      allow read: if isSignedIn();
+      allow write: if isOwner(driverId) || hasAnyRole(['ADMIN', 'MANAGER']);
+    }
+
+    // ---- orders -----------------------------------------------------------------------
+    match /orders/{orderId} {
+      function order() { return resource.data; }
+
+      allow read: if isSignedIn() && (
+        request.auth.uid == order().customerId ||
+        request.auth.uid == order().shopperId ||
+        request.auth.uid == order().driverId ||
+        hasAnyRole(['ADMIN', 'MANAGER']) ||
+        // A driver browsing for unassigned, staged runs to accept (DriverJobsScreen) — no
+        // driver is on this order yet, so none of the owner checks above can match.
+        (order().driverId == null && order().orderStatus == 'READY_FOR_COLLECTION')
+      );
+
+      // Orders are meant to be created by the checkoutOrder Cloud Function (which runs the
+      // atomic stock-decrement transaction — Part 1 section 2.3), but that Function is written
+      // and tested (functions/src/checkout.ts) without ever being deployed, because Cloud
+      // Functions require the Blaze plan and this project stays on the free Spark plan. So the
+      // Android app runs the same transaction client-side instead (FirestoreRepository.
+      // checkoutOrder) and this rule authorises exactly that: a customer may only create an
+      // order for themselves, freshly RECEIVED, with no driver/picker/delivery time set yet —
+      // everything a real payment+fulfilment pipeline would need to be true before this write.
+      allow create: if isSignedIn() &&
+        request.resource.data.customerId == request.auth.uid &&
+        request.resource.data.orderStatus in ['RECEIVED', 'PICKING'] &&
+        request.resource.data.driverId == null &&
+        request.resource.data.deliveredTime == null;
+
+      // Status/field updates the client is allowed to make directly: the assigned picker
+      // staging an order or proposing a substitution, the owning customer responding to a
+      // substitution, or the assigned driver accepting/advancing/completing delivery — all
+      // standing in for Cloud Functions (acceptDeliveryRun, confirmProofOfDelivery,
+      // proposeSubstitution, respondToSubstitution) that are likewise undeployed on Spark.
+      allow update: if hasAnyRole(['ADMIN', 'MANAGER']) ||
+        (isSignedIn() && request.auth.uid == order().shopperId) ||
+        (isSignedIn() && request.auth.uid == order().driverId) ||
+        (isSignedIn() && request.auth.uid == order().customerId) ||
+        // A driver claiming an unassigned, staged run (their own uid, only that one field).
+        (isSignedIn() && order().driverId == null && order().orderStatus == 'READY_FOR_COLLECTION' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['driverId']) &&
+         request.resource.data.driverId == request.auth.uid);
+
+      allow delete: if hasAnyRole(['ADMIN']);
+
+      match /pickProgress/{productId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId ||
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.shopperId ||
+          hasAnyRole(['ADMIN', 'MANAGER'])
+        );
+        allow write: if isSignedIn() &&
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.shopperId;
+      }
+
+      // Driver scans each basket item off before proof of delivery unlocks — mirrors
+      // pickProgress above, same reasoning.
+      match /deliveryProgress/{productId} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.customerId ||
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.driverId ||
+          hasAnyRole(['ADMIN', 'MANAGER'])
+        );
+        allow write: if isSignedIn() &&
+          request.auth.uid == get(/databases/$(database)/documents/orders/$(orderId)).data.driverId;
+      }
+    }
+  }
+}

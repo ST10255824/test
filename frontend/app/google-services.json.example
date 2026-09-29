@@ -1,0 +1,30 @@
+{
+  "_comment": "TEMPLATE ONLY. Download your real google-services.json from Firebase Console > Project Settings > Your apps > google-services.json, then save it as app/google-services.json (that filename is gitignored on purpose). See README.md 'Firebase project setup' for the exact steps.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "mackson-delivery-REPLACE",
+    "storage_bucket": "mackson-delivery-REPLACE.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.mackson.delivery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_REAL_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

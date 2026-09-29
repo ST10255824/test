@@ -1,0 +1,125 @@
+name: CI
+
+# Runs on every pull request into develop or main — the GitHub branch protection rules
+# (see README "Branching strategy") require this workflow to pass, plus one peer review,
+# before a PR can merge. Part 1 section 9.3.14 describes this exact flow.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android build, lint & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Provide google-services.json
+        # Real projects should add a base64-encoded copy of their Firebase config as the
+        # GOOGLE_SERVICES_JSON repo secret. Falls back to the tracked placeholder so the
+        # build/lint/test steps still run (with no real Firebase project) on forks and before
+        # that secret is configured.
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 --decode > frontend/app/google-services.json
+          else
+            cp frontend/app/google-services.json.example frontend/app/google-services.json
+          fi
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Lint
+        run: ./gradlew lintDebug --console=plain
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --console=plain
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: frontend/app/build/reports/tests/testDebugUnitTest
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: frontend/app/build/outputs/apk/debug/app-debug.apk
+
+  functions:
+    name: Cloud Functions build, lint & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (TypeScript)
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test -- --ci
+
+  admin-web:
+    name: Admin web console build & lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/admin-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/admin-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-web-dist
+          path: frontend/admin-web/dist

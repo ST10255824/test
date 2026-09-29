@@ -1,0 +1,31 @@
+{
+  "_comment": "For LOCAL EMULATOR USE ONLY. Copy this file to app/google-services.json to run the app against `firebase emulators:start` without creating a real Firebase project. Matches the demo project id the emulators and seed script use by default. Replace with your real google-services.json (see google-services.json.example) once you're ready to connect to a real Firebase project.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "demo-mackson-delivery",
+    "storage_bucket": "demo-mackson-delivery.appspot.com",
+    "firebase_url": "https://demo-mackson-delivery-default-rtdb.firebaseio.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.mackson.delivery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "demo-emulator-key"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

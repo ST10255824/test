@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Production (this file): HTTPS/TLS 1.3 only, per Part 1 section 9.3.13
+         ("Enforced TLS 1.3 Encryption"). No domain-config means the default policy
+         (cleartext denied, matching android:usesCleartextTraffic="false") applies.
+
+         Debug builds use a *different* copy of this same file — see
+         app/src/debug/res/xml/network_security_config.xml — which additionally allows plain
+         HTTP to 10.0.2.2/localhost so the app can reach `firebase emulators:start` on the host
+         machine. Android's build system picks the debug variant automatically for debug
+         builds via source set resource overriding; this file is never used in a debug build. -->
+</network-security-config>

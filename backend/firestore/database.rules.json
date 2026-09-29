@@ -1,0 +1,50 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "driverTelemetry": {
+      "$driverId": {
+        ".read": "auth != null && (auth.uid === $driverId || auth.token.role === 'ADMIN' || auth.token.role === 'MANAGER' || root.child('runAssignments').child($driverId).child('customerId').val() === auth.uid)",
+        ".write": "auth != null && auth.uid === $driverId"
+      }
+    },
+
+    "runAssignments": {
+      "$driverId": {
+        ".read": "auth != null && (auth.uid === $driverId || root.child('runAssignments').child($driverId).child('customerId').val() === auth.uid)",
+        // Set by the acceptDeliveryRun Cloud Function (Admin SDK) when deployed; on the free
+        // Spark plan this project runs on, Cloud Functions aren't deployed, so the driver's own
+        // app writes this directly instead, right after it wins the order in the matching
+        // Firestore transaction (FirestoreRepository.acceptDeliveryRun). A driver can only ever
+        // write their own node, matching the driverTelemetry write rule above.
+        ".write": "auth != null && auth.uid === $driverId"
+      }
+    },
+
+    "chatParticipants": {
+      "$orderId": {
+        ".read": "auth != null && (auth.uid === data.child('customerId').val() || auth.uid === data.child('shopperId').val() || auth.token.role === 'ADMIN')",
+        // Normally set by the checkoutOrder Cloud Function; undeployed on Spark (see above), so
+        // the customer's own device sets its own participant entry as part of placing the order.
+        ".write": "auth != null && (!data.exists() || auth.uid === data.child('customerId').val())",
+        "shopperId": {
+          // The picker auto-assigned at checkout time (the customer's client resolves this,
+          // replacing the undeployed onOrderCreate trigger) needs to be settable too.
+          ".write": "auth != null"
+        }
+      }
+    },
+
+    "substitutionChats": {
+      "$orderId": {
+        ".read": "auth != null && (auth.uid === root.child('chatParticipants').child($orderId).child('customerId').val() || auth.uid === root.child('chatParticipants').child($orderId).child('shopperId').val() || auth.token.role === 'ADMIN')",
+        "messages": {
+          "$messageId": {
+            ".write": "auth != null && (auth.uid === root.child('chatParticipants').child($orderId).child('customerId').val() || auth.uid === root.child('chatParticipants').child($orderId).child('shopperId').val())"
+          }
+        }
+      }
+    }
+  }
+}

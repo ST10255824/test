@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.MacksonDelivery" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Branded launch screen (androidx.core.splashscreen) — the crest on the same sky-blue
+         used across the auth flow, so the splash blends straight into LoginScreen/RoleHubScreen
+         instead of flashing a different colour first. The platform (API 31+) and the compat
+         backport (below 31) both animate this icon in/out automatically. -->
+    <style name="Theme.MacksonDelivery.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/mackson_sky_blue</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/logo_macksons_padded</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/mackson_sky_blue</item>
+        <item name="postSplashScreenTheme">@style/Theme.MacksonDelivery</item>
+    </style>
+</resources>

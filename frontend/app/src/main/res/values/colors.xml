@@ -1,0 +1,10 @@
+<resources>
+    <color name="mackson_navy">#1E3A5F</color>
+    <color name="mackson_navy_deep">#0B1C38</color>
+    <color name="mackson_gold">#D4A017</color>
+    <color name="mackson_gold_light">#F3C969</color>
+    <color name="mackson_sky_blue">#9FD0F8</color>
+    <color name="surface_blue_tint">#EFF4FB</color>
+    <color name="surface_dark_navy">#0B1626</color>
+    <color name="error_red">#DC2626</color>
+</resources>

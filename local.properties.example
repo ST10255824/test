@@ -1,0 +1,7 @@
+# Copy this file to local.properties (gitignored) and fill in your own values.
+# Android Studio writes sdk.dir here automatically on first sync — leave that line alone.
+
+# Google Maps SDK for Android key, used by the live order-tracking screen (Part 1 US-13).
+# Create one at https://console.cloud.google.com/google/maps-apis/credentials for the same
+# GCP project as your Firebase project, then restrict it to the Maps SDK for Android.
+MAPS_API_KEY=

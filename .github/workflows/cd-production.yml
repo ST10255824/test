@@ -1,0 +1,111 @@
+name: Deploy - Production
+
+# Fires on merge into main — the protected release branch (Part 1 section 9.3.14, "Main
+# Domain/Release Branch"). Only ever reached via a release PR from develop, after staging
+# sign-off, so this workflow assumes the backend already ran clean on staging.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-functions:
+    name: Deploy Functions, Firestore & Database rules (production)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/functions/package-lock.json
+
+      - name: Install function dependencies
+        working-directory: backend/functions
+        run: npm ci
+
+      - name: Run tests one more time before touching production
+        working-directory: backend/functions
+        run: npm test -- --ci
+
+      - name: Authenticate to Firebase
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PRODUCTION }}' > "$RUNNER_TEMP/gcp-key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
+
+      - name: Deploy backend
+        run: |
+          npx firebase-tools deploy \
+            --only functions,firestore:rules,firestore:indexes,database,storage \
+            --project "${{ secrets.FIREBASE_PROJECT_ID_PRODUCTION }}" \
+            --non-interactive
+
+  build-release-bundle:
+    name: Build release Android App Bundle
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Provide google-services.json (production project)
+        run: echo '${{ secrets.GOOGLE_SERVICES_JSON_PRODUCTION }}' | base64 --decode > frontend/app/google-services.json
+
+      - name: Build release bundle
+        # Signing config isn't wired up here — see README "Release signing" for how to add a
+        # keystore secret and a signingConfigs block once you're ready to publish to Play
+        # Console. This step still validates the release build compiles cleanly.
+        run: ./gradlew bundleRelease --console=plain
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-bundle
+          path: frontend/app/build/outputs/bundle/release/app-release.aab
+
+  deploy-admin-web:
+    name: Deploy admin web console (production)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/admin-web/package-lock.json
+
+      - name: Install & build
+        working-directory: frontend/admin-web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Authenticate to Firebase
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PRODUCTION }}' > "$RUNNER_TEMP/gcp-key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
+
+      - name: Deploy to Firebase Hosting
+        # Hosting is on the free Spark plan, unlike Functions/Storage above — no Blaze needed.
+        run: |
+          npx firebase-tools deploy \
+            --only hosting \
+            --project "${{ secrets.FIREBASE_PROJECT_ID_PRODUCTION }}" \
+            --non-interactive

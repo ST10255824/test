@@ -1,0 +1,30 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+**/build/
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+
+# Firebase
+frontend/app/google-services.json
+.firebaserc
+backend/functions/node_modules/
+backend/functions/lib/
+firebase-debug.log
+firestore-debug.log
+database-debug.log
+ui-debug.log
+.firebase/
+*.env
+serviceAccountKey.json
+
+# Node
+node_modules/
+npm-debug.log*
+dist/
